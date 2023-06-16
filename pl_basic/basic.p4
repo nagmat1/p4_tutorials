@@ -118,7 +118,7 @@ control MyIngress(inout headers hdr,
         mark_to_drop(standard_metadata);
     }
 
-    action ipv4_forward(macAddr_t dstAddr, egressSpec_t port) {
+    action ipv4_forward(egressSpec_t port) {
         standard_metadata.egress_spec = port;
         //hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
         //hdr.ethernet.dstAddr = dstAddr;
