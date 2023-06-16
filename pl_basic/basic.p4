@@ -120,8 +120,8 @@ control MyIngress(inout headers hdr,
 
     action ipv4_forward(macAddr_t dstAddr, egressSpec_t port) {
         standard_metadata.egress_spec = port;
-        hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
-        hdr.ethernet.dstAddr = dstAddr;
+        //hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+        //hdr.ethernet.dstAddr = dstAddr;
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
     }
 
@@ -135,7 +135,7 @@ control MyIngress(inout headers hdr,
             NoAction;
         }
         size = 1024;
-        default_action = drop();
+        default_action = NoAction();
     }
 
     apply {
@@ -162,15 +162,11 @@ control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
     apply { 
-	if (hdr.ipv4.isValid()){
            hdr.my_meta.setValid();
            hdr.my_meta.enq_timestamp = 0xA; //standard_metadata.enq_timestamp;
            hdr.my_meta.enq_qdepth = (bit<32>) 0xB; //standard_metadata.enq_qdepth;
            hdr.my_meta.deq_timedelta = 0xC; //standard_metadata.deq_timedelta;
            hdr.my_meta.deq_qdepth = (bit<32>) 0xD; //standard_metadata.deq_qdepth;
-        }
-
-
  }
 }
 
