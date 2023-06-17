@@ -147,7 +147,7 @@ control MyIngress(inout headers hdr,
 
     table ipv4_lpm {
         key = {
-            hdr.ipv4.dstAddr: lpm;
+            hdr.ipv4.dstAddr: exact;
         }
         actions = {
             ipv4_forward;
