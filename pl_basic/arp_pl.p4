@@ -206,9 +206,10 @@ control MyIngress(inout headers hdr,
     }
 
     action ipv4_forward(egressSpec_t port) {
-        standard_metadata.egress_spec = port;
+        //standard_metadata.egress_spec = port;
         //hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
         //hdr.ethernet.dstAddr = dstAddr;
+        meta.egress_port = port;
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
     }
 
@@ -226,8 +227,8 @@ control MyIngress(inout headers hdr,
     }
 
     action forward_ipv4() {
-        hdr.ethernet.dstAddr = meta.mac_da;
-        hdr.ethernet.srcAddr = meta.mac_sa;
+        //hdr.ethernet.dstAddr = meta.mac_da;
+        //hdr.ethernet.srcAddr = meta.mac_sa;
         hdr.ipv4.ttl         = hdr.ipv4.ttl - 1;
 
         standard_metadata.egress_spec = meta.egress_port;
