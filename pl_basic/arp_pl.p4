@@ -354,11 +354,11 @@ control MyComputeChecksum(inout headers  hdr, inout metadata meta) {
 control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
+        packet.emit(hdr.arp);
+        packet.emit(hdr.arp_ipv4); 
         packet.emit(hdr.ipv4);
         packet.emit(hdr.udp);
         packet.emit(hdr.tcp);
-        packet.emit(hdr.arp);
-        packet.emit(hdr.arp_ipv4);
         packet.emit(hdr.my_meta);
     }
 }
