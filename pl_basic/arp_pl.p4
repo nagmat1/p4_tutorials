@@ -357,6 +357,8 @@ control MyDeparser(packet_out packet, in headers hdr) {
         packet.emit(hdr.ipv4);
         packet.emit(hdr.udp);
         packet.emit(hdr.tcp);
+        packet.emit(hdr.arp);
+        packet.emit(hdr.arp_ipv4);
         packet.emit(hdr.my_meta);
     }
 }
