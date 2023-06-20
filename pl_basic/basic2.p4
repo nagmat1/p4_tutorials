@@ -1,8 +1,16 @@
 #include <core.p4>
 #include <v1model.p4>
 const bit<16> TYPE_IPV4 = 0x800;
-const bit<8> UDP_PROTCOL = 0x11;
-const bit<8> TCP_PROTCOL = 0x06;
+const bit<8> UDP_PROTOCOL = 0x11;
+const bit<8> TCP_PROTOCOL = 0x06;
+const bit<16> ETHERTYPE_ARP  = 0x0806;
+const bit<8>  IPPROTO_ICMP   = 0x01;
+const bit<16> ARP_HTYPE_ETHERNET = 0x0001;
+const bit<16> ARP_PTYPE_IPV4     = 0x0800;
+const bit<8>  ARP_HLEN_ETHERNET  = 6;
+const bit<8>  ARP_PLEN_IPV4      = 4;
+const bit<16> ARP_OPER_REQUEST   = 1;
+const bit<16> ARP_OPER_REPLY     = 2;
 /*************************************************************************
 *********************** H E A D E R S  ***********************************
 *************************************************************************/
@@ -14,6 +22,22 @@ header ethernet_t {
     macAddr_t srcAddr;
     bit<16>   etherType;
 }
+
+header arp_t {
+    bit<16> htype;
+    bit<16> ptype;
+    bit<8>  hlen;
+    bit<8>  plen;
+    bit<16> oper;
+}
+
+header arp_ipv4_t {
+    macAddr_t  sha;
+    ip4Addr_t spa;
+    macAddr_t  tha;
+    ip4Addr_t tpa;
+}
+
 header ipv4_t {
     bit<4>    version;
     bit<4>    ihl;
@@ -34,7 +58,6 @@ header udp_t {
     bit<16> length_;
     bit<16> checksum;
 }
-
 header tcp_t {
     bit<16> srcPort;
     bit<16> dstPort;
@@ -58,6 +81,8 @@ header metadata_t {
 }
 struct headers {
     ethernet_t   ethernet;
+    arp_t         arp;
+    arp_ipv4_t    arp_ipv4;
     ipv4_t       ipv4;
     udp_t        udp;
     tcp_t        tcp;
@@ -70,36 +95,57 @@ parser MyParser(packet_in packet,
                 out headers hdr,
                 inout metadata meta,
                 inout standard_metadata_t standard_metadata) {
+
     state start {
         transition parse_ethernet;
     }
+
     state parse_ethernet {
         packet.extract(hdr.ethernet);
         transition select(hdr.ethernet.etherType) {
             TYPE_IPV4: parse_ipv4;
+            ETHERTYPE_ARP  : parse_arp;
             default: accept;
         }
     }
+
     state parse_ipv4 {
         packet.extract(hdr.ipv4);
         transition select(hdr.ipv4.protocol){
-            UDP_PROTCOL: parse_udp;
-            TCP_PROTCOL: parse_tcp;
-            default: accept;
+        UDP_PROTOCOL: parse_udp;
+        TCP_PROTOCOL: parse_tcp;
+        default : accept;
+    }
+
+}
+
+state parse_arp {
+        packet.extract(hdr.arp);
+        transition select(hdr.arp.htype, hdr.arp.ptype,
+                          hdr.arp.hlen,  hdr.arp.plen) {
+            (ARP_HTYPE_ETHERNET, ARP_PTYPE_IPV4,
+             ARP_HLEN_ETHERNET,  ARP_PLEN_IPV4) : parse_arp_ipv4;
+            default : accept;
         }
     }
-    state parse_udp{
+state parse_arp_ipv4 {
+        packet.extract(hdr.arp_ipv4);
+        transition accept;
+    }
+
+
+ state parse_udp{
          packet.extract(hdr.udp);
          transition accept;
     }
-    state parse_tcp{
+
+ state parse_tcp{
          packet.extract(hdr.tcp);
          transition accept;
     }
+
 }
-/*************************************************************************
-************   C H E C K S U M    V E R I F I C A T I O N   *************
-*************************************************************************/
+/*************************************************************************/
 control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
     apply {  }
 }
@@ -208,6 +254,8 @@ control MyComputeChecksum(inout headers  hdr, inout metadata meta) {
 control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
+        packet.emit(hdr.arp);
+        packet.emit(hdr.arp_ipv4);
         packet.emit(hdr.ipv4);
         packet.emit(hdr.udp);
         packet.emit(hdr.tcp);
@@ -225,4 +273,4 @@ MyEgress(),
 MyComputeChecksum(),
 MyDeparser()
 ) main;
-
+                                                                    
