@@ -45,18 +45,15 @@ const bit<16> ARP_OPER_REQUEST   = 1;
 const bit<16> ARP_OPER_REPLY     = 2;
 
 header arp_t {
-    bit<16> htype;
-    bit<16> ptype;
-    bit<8>  hlen;
-    bit<8>  plen;
-    bit<16> oper;
-}
-
-header arp_ipv4_t {
-    macAddr_t  sha;
-    ip4Addr_t spa;
-    macAddr_t  tha;
-    ip4Addr_t tpa;
+    bit<16> hrd; // Hardware Type
+    bit<16> pro; // Protocol Type
+    bit<8> hln; // Hardware Address Length
+    bit<8> pln; // Protocol Address Length
+    bit<16> op;  // Opcode
+    macAddr_t sha; // Sender Hardware Address
+    ip4Addr_t spa; // Sender Protocol Address
+    macAddr_t tha; // Target Hardware Address
+    ip4Addr_t tpa; // Target Protocol Address
 }
 
 const bit<8> ICMP_ECHO_REQUEST = 8;
@@ -111,7 +108,6 @@ header metadata_t {
 struct headers {
     ethernet_t   ethernet;
     arp_t         arp;
-    arp_ipv4_t    arp_ipv4;
     ipv4_t       ipv4;
     udp_t        udp;
     tcp_t        tcp;
@@ -154,18 +150,7 @@ parser MyParser(packet_in packet,
 
 state parse_arp {
         packet.extract(hdr.arp);
-        transition select(hdr.arp.htype, hdr.arp.ptype,
-                          hdr.arp.hlen,  hdr.arp.plen) {
-            (ARP_HTYPE_ETHERNET, ARP_PTYPE_IPV4,
-             ARP_HLEN_ETHERNET,  ARP_PLEN_IPV4) : parse_arp_ipv4;
-            default : accept;
-        }
-    }
-
-state parse_arp_ipv4 {
-        packet.extract(hdr.arp_ipv4);
-        meta.dst_ipv4 = hdr.arp_ipv4.tpa;
-        transition accept;
+            transition accept;
     }
 
 
@@ -209,9 +194,18 @@ control MyIngress(inout headers hdr,
         //standard_metadata.egress_spec = port;
         //hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
         //hdr.ethernet.dstAddr = dstAddr;
-        meta.egress_port = port;
+        standard_metadata.egress_spec = port;
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
     }
+
+    action arp_forward2(egressSpec_t port) {
+        //standard_metadata.egress_spec = port;
+        //hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+        //hdr.ethernet.dstAddr = dstAddr;
+        standard_metadata.egress_spec = port;
+        hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
+    }
+
 
     table ipv4_lpm {
         key = {
@@ -233,69 +227,23 @@ control MyIngress(inout headers hdr,
 
         standard_metadata.egress_spec = meta.egress_port;
     }
-
-    action send_arp_reply() {
-        hdr.ethernet.dstAddr = hdr.arp_ipv4.sha;
-        hdr.ethernet.srcAddr = meta.mac_da;
-
-        hdr.arp.oper         = ARP_OPER_REPLY;
-
-        hdr.arp_ipv4.tha     = hdr.arp_ipv4.sha;
-        hdr.arp_ipv4.tpa     = hdr.arp_ipv4.spa;
-        hdr.arp_ipv4.sha     = meta.mac_da;
-        hdr.arp_ipv4.spa     = meta.dst_ipv4;
-
-        standard_metadata.egress_spec = standard_metadata.ingress_port;
-    }
-
-  action send_icmp_reply() {
-        macAddr_t   tmp_mac;
-        ip4Addr_t  tmp_ip;
-
-        tmp_mac              = hdr.ethernet.dstAddr;
-        hdr.ethernet.dstAddr = hdr.ethernet.srcAddr;
-        hdr.ethernet.srcAddr = tmp_mac;
-
-        tmp_ip               = hdr.ipv4.dstAddr;
-        hdr.ipv4.dstAddr     = hdr.ipv4.srcAddr;
-        hdr.ipv4.srcAddr     = tmp_ip;
-
-        hdr.icmp.type        = ICMP_ECHO_REPLY;
-        hdr.icmp.checksum    = 0; // For now
-
-        standard_metadata.egress_spec = standard_metadata.ingress_port;
-    }
-
-    table forward {
+   table arp_forward {
         key = {
-            hdr.arp.isValid()      : exact;
-            hdr.arp.oper           : ternary;
-            hdr.arp_ipv4.isValid() : exact;
-            hdr.ipv4.isValid()     : exact;
-            hdr.icmp.isValid()     : exact;
-            hdr.icmp.type          : ternary;
+            hdr.arp.tpa: exact;
         }
         actions = {
-            forward_ipv4;
-            send_arp_reply;
-            send_icmp_reply;
+            arp_forward2;
             NoAction;
         }
-        const default_action = NoAction();
-        const entries = {
-            ( true, ARP_OPER_REQUEST, true, false, false, _  ) :
-                                                         send_arp_reply();
-            ( false, _,               false, true, false, _  ) :
-                                                         forward_ipv4();
-            ( false, _,               false, true, true, ICMP_ECHO_REQUEST ) :
-                                                         send_icmp_reply();
-        }
+        size = 1024;
+        default_action = NoAction();
     }
+
 
     apply {
         ipv4_lpm.apply();
-        forward.apply();
-        //if (hdr.arp.isValid()) { send_arp_reply;}
+        //forward.apply();
+        if (((hdr.arp.isValid()) && (hdr.arp.op == ARP_OPER_REQUEST))) { arp_forward.apply(); }
     }
 }
 
@@ -355,7 +303,6 @@ control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
         packet.emit(hdr.arp);
-        packet.emit(hdr.arp_ipv4); 
         packet.emit(hdr.ipv4);
         packet.emit(hdr.udp);
         packet.emit(hdr.tcp);
