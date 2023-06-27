@@ -203,7 +203,7 @@ control MyIngress(inout headers hdr,
         //hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
         //hdr.ethernet.dstAddr = dstAddr;
         standard_metadata.egress_spec = port;
-        hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
+        //hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
     }
 
 
@@ -243,7 +243,7 @@ control MyIngress(inout headers hdr,
     apply {
         ipv4_lpm.apply();
         //forward.apply();
-        if (((hdr.arp.isValid()) && (hdr.arp.op == ARP_OPER_REQUEST))) { arp_forward.apply(); }
+        if (((hdr.arp.isValid()) && (hdr.arp.op == ARP_OPER_REQUEST || hdr.arp.op == ARP_OPER_REPLY))) { arp_forward.apply(); }
     }
 }
 
